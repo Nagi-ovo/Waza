@@ -470,12 +470,52 @@ def check_no_root_skill(root: Path):
 def check_rules_files_present(root: Path):
     """Required shared rule files outside skills/ that the per-skill ref check
     doesn't cover."""
-    required = ["english.md", "chinese.md", "anti-patterns.md", "durable-context.md"]
+    required = [
+        "english.md",
+        "chinese.md",
+        "anti-patterns.md",
+        "durable-context.md",
+        "waza-routing.md",
+    ]
     for name in required:
         path = root / "rules" / name
         if not path.exists():
             fail(f"MISSING RULE FILE: {path}")
     print(f"ok: rules/ files present ({', '.join(required)})")
+
+
+def check_waza_routing_skills(root: Path, skill_names: set[str]):
+    """rules/waza-routing.md routing table must enumerate exactly the skills
+    under skills/. Structural drift only -- trigger phrases stay hand-tuned."""
+    path = root / "rules" / "waza-routing.md"
+    if not path.exists():
+        return
+    listed: set[str] = set()
+    for line in path.read_text().splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in line.split("|")]
+        if len(cells) < 3:
+            continue
+        name = cells[1]
+        # Skip table header (literal "skill") and separator rows ("---").
+        if name == "skill" or set(name) <= {"-", ":"}:
+            continue
+        if re.fullmatch(r"[a-z][a-z0-9_-]*", name):
+            listed.add(name)
+    missing = skill_names - listed
+    extra = listed - skill_names
+    if missing:
+        fail(
+            "WAZA ROUTING MISSING SKILLS: rules/waza-routing.md table omits: "
+            f"{', '.join(sorted(missing))}"
+        )
+    if extra:
+        fail(
+            "WAZA ROUTING STALE SKILLS: rules/waza-routing.md lists skills "
+            f"not in skills/: {', '.join(sorted(extra))}"
+        )
+    print(f"ok: rules/waza-routing.md skills match ({len(listed)} skills)")
 
 
 def check_readme_install_command(root: Path):
